@@ -1,0 +1,7 @@
+fastapi
+sqlmodel
+psycopg2-binary
+python-dotenv
+uvicorn[standard]
+sqladmin
+itsdangerous
