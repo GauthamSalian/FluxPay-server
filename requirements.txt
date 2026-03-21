@@ -6,3 +6,4 @@ uvicorn[standard]
 sqladmin
 itsdangerous
 supabase
+bcrypt
