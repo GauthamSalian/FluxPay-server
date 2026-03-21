@@ -1,0 +1,1 @@
+this directory contains all the api routes for the fluxpay server to interact with the fluxpay client

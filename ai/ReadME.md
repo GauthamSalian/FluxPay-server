@@ -1,0 +1,1 @@
+this directory contains all the ai services for the fluxpay application
