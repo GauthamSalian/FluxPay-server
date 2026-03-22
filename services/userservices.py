@@ -178,7 +178,7 @@ def change_password(old_password: str, new_password: str, confirm_new_password: 
     response = query.execute()
     return response
 
-SECRET_KEY = "your_secret"
+SECRET_KEY = os.getenv("JWT_SECRET", "your_secret")
 ALGORITHM = "HS256"
 
 def create_access_token(data: dict):

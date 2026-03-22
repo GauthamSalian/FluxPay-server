@@ -51,3 +51,45 @@ def get_user_wallet_route(current_user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+import os
+
+class DepositOrderReq(BaseModel):
+    amount: float
+
+class VerifyDepositReq(BaseModel):
+    amount: float
+    razorpay_payment_id: str
+    razorpay_order_id: str
+    razorpay_signature: str
+
+@router.post("/deposit/order")
+def deposit_order_route(req: DepositOrderReq, current_user: dict = Depends(get_current_user)):
+    try:
+        user_id = str(current_user.get("id"))
+        order = walletservices.create_deposit_order(user_id=user_id, amount=req.amount)
+        return {
+            "order": order,
+            "key": os.getenv("RAZORPAY_TEST_ID") # Return the public key to the frontend dynamically
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@router.post("/deposit/verify")
+def deposit_verify_route(req: VerifyDepositReq, current_user: dict = Depends(get_current_user)):
+    try:
+        user_id = str(current_user.get("id"))
+        result = walletservices.deposit_funds_to_wallet(
+            user_id=user_id, 
+            amount=req.amount,
+            razorpay_payment_id=req.razorpay_payment_id,
+            razorpay_order_id=req.razorpay_order_id,
+            razorpay_signature=req.razorpay_signature
+        )
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))

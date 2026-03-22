@@ -5,8 +5,13 @@ from db import supabase
 from twilio.rest import Client
 # reuse hash logic from userservices to hash userpin
 from services import userservices
+import razorpay
 
 load_dotenv()
+
+razorpay_client = razorpay.Client(
+    auth=(os.getenv("RAZORPAY_TEST_ID"), os.getenv("RAZORPAY_TEST_SECRET"))
+)
 
 wallet_otp_store = {}
 
@@ -65,3 +70,52 @@ def get_wallet(user_id: str):
     if not query.data:
         raise ValueError("Wallet not found")
     return query.data[0]
+
+from datetime import datetime
+
+def create_deposit_order(user_id: str, amount: float):
+    wallet = get_wallet(user_id)
+    order_amount = int(amount * 100)
+    order_currency = 'INR'
+    # UUID is 36 chars. Razorpay limit is 40. Just use the UUID directly stringified.
+    order_receipt = str(wallet['id'])
+    
+    razorpay_order = razorpay_client.order.create({
+        'amount': order_amount,
+        'currency': order_currency,
+        'receipt': order_receipt,
+        'payment_capture': '1'
+    })
+    return razorpay_order
+
+import uuid
+
+def deposit_funds_to_wallet(user_id: str, amount: float, razorpay_payment_id: str, razorpay_order_id: str, razorpay_signature: str):
+    # Verify signature
+    try:
+        razorpay_client.utility.verify_payment_signature({
+            'razorpay_order_id': razorpay_order_id,
+            'razorpay_payment_id': razorpay_payment_id,
+            'razorpay_signature': razorpay_signature
+        })
+    except razorpay.errors.SignatureVerificationError:
+        raise ValueError("Signature verification failed")
+
+    wallet = get_wallet(user_id)
+    wallet_id = wallet["id"]
+    
+    new_balance = float(wallet["balance"]) + float(amount)
+    
+    # Update wallet balance
+    supabase.table("wallet").update({"balance": new_balance}).eq("id", wallet_id).execute()
+    
+    # Log deposit in deposits table matching the schema: id (uuid), wallet_id (uuid), amount (numeric), created_at (timestamp)
+    deposit_data = {
+        "id": str(uuid.uuid4()),
+        "wallet_id": wallet_id,
+        "amount": amount,
+        "created_at": datetime.utcnow().isoformat()
+    }
+    supabase.table("deposits").insert(deposit_data).execute()
+    
+    return {"message": "Deposit successful", "new_balance": new_balance}
