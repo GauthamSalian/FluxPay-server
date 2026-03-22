@@ -187,3 +187,34 @@ def create_access_token(data: dict):
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
+
+from fastapi import Depends, HTTPException
+from fastapi.security import OAuth2PasswordBearer
+from jose import JWTError
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/users/login")
+
+def get_current_user(token: str = Depends(oauth2_scheme)):
+    credentials_exception = HTTPException(
+        status_code=401,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        identifier: str = payload.get("sub")
+        if identifier is None:
+            raise credentials_exception
+    except JWTError:
+        raise credentials_exception
+    
+    query = supabase.table("users").select("*")
+    if "@" in identifier:
+        query = query.eq("email", identifier)
+    else:
+        query = query.eq("phone", identifier)
+        
+    response = query.execute()
+    if not response.data:
+        raise credentials_exception
+    return response.data[0]
