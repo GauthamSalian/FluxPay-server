@@ -1,6 +1,46 @@
 import bcrypt
 from datetime import datetime, timezone
 from db import supabase
+import random
+import smtplib
+from email.mime.text import MIMEText
+from dotenv import load_dotenv
+import os
+load_dotenv()
+
+otp_store = {}
+verified_emails = set()
+
+def generate_otp() -> str:
+    return str(random.randint(100000, 999999))
+
+def send_otp_email(receiver_email, otp):
+    sender_email = os.getenv("APP_GMAIL")
+    app_password = os.getenv("APP_PASSWORD")
+
+    subject = "FluxPay: Your OTP Code"
+    body = f"Your OTP is: {otp}. It will expire in 5 minutes."
+
+    msg = MIMEText(body)
+    msg['Subject'] = subject
+    msg['From'] = sender_email
+    msg['To'] = receiver_email
+
+    with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
+        server.login(sender_email, app_password)
+        server.send_message(msg)
+    
+    otp_store[receiver_email] = str(otp)
+    return True
+
+def verify_otp(email: str, otp: str) -> bool:
+    if email not in otp_store:
+        return False
+    if otp_store[email] != otp:
+        return False
+    del otp_store[email]
+    verified_emails.add(email)
+    return True
 
 def hash_password(password: str) -> str:
     # generate salt and hash password
@@ -14,6 +54,9 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 def create_user(name: str, email: str, phone: str, password: str, location: str):
     hashed_pw = hash_password(password)
     now = datetime.now(timezone.utc).isoformat()
+
+    if email not in verified_emails:
+        raise ValueError("User not verified via OTP")
     
     user_data = {
         "username": name,
@@ -26,6 +69,10 @@ def create_user(name: str, email: str, phone: str, password: str, location: str)
     }
     
     response = supabase.table("users").insert(user_data).execute()
+    
+    if email in verified_emails:
+        verified_emails.remove(email)
+        
     return response
 
 def login_user(email: str = None, phone: str = None, password: str = None):

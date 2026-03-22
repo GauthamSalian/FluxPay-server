@@ -38,6 +38,28 @@ def create_user_route(req: CreateUserReq):
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+class SendOtpReq(BaseModel):
+    email: str
+
+class VerifyOtpReq(BaseModel):
+    email: str
+    otp: str
+
+@router.post("/send-otp")
+def send_otp_route(req: SendOtpReq):
+    try:
+        otp = userservices.generate_otp()
+        userservices.send_otp_email(req.email, otp)
+        return {"message": "OTP sent successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@router.post("/verify-otp")
+def verify(req: VerifyOtpReq):
+    if userservices.verify_otp(req.email, req.otp):
+        return {"message": "Verified"}
+    return {"message": "Invalid OTP"}
+
 @router.post("/login")
 def login_user_route(req: LoginUserReq):
     try:
