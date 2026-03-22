@@ -60,6 +60,28 @@ def verify(req: VerifyOtpReq):
         return {"message": "Verified"}
     return {"message": "Invalid OTP"}
 
+class SendOtpSmsReq(BaseModel):
+    phone: str
+
+class VerifyOtpSmsReq(BaseModel):
+    phone: str
+    otp: str
+
+@router.post("/send-otp-sms")
+def send_otp_sms_route(req: SendOtpSmsReq):
+    try:
+        otp = userservices.generate_otp()
+        userservices.send_otp_sms(req.phone, otp)
+        return {"message": "OTP sent successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@router.post("/verify-otp-sms")
+def verify_sms(req: VerifyOtpSmsReq):
+    if userservices.verify_otp_sms(req.phone, req.otp):
+        return {"message": "Verified"}
+    return {"message": "Invalid OTP"}
+
 @router.post("/login")
 def login_user_route(req: LoginUserReq):
     try:

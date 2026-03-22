@@ -6,10 +6,14 @@ import smtplib
 from email.mime.text import MIMEText
 from dotenv import load_dotenv
 import os
+from twilio.rest import Client
 load_dotenv()
 
 otp_store = {}
+otp_sms_store = {}
 verified_emails = set()
+verified_phone_numbers = set()
+
 
 def generate_otp() -> str:
     return str(random.randint(100000, 999999))
@@ -33,6 +37,19 @@ def send_otp_email(receiver_email, otp):
     otp_store[receiver_email] = str(otp)
     return True
 
+def send_otp_sms(phone_number: str, otp: str):
+    account_sid = os.getenv("TWILIO_SID")
+    auth_token = os.getenv("TWILIO_AUTH_TOKEN")
+    client = Client(account_sid, auth_token)
+    message = client.messages.create(
+        body=f"Your OTP is: {otp}. It will expire in 5 minutes.",
+        from_= os.getenv("TWILIO_PHONE_NUMBER"),
+        to=phone_number
+    )
+
+    otp_sms_store[phone_number] = str(otp)
+    return True
+
 def verify_otp(email: str, otp: str) -> bool:
     if email not in otp_store:
         return False
@@ -40,6 +57,15 @@ def verify_otp(email: str, otp: str) -> bool:
         return False
     del otp_store[email]
     verified_emails.add(email)
+    return True
+
+def verify_otp_sms(phone_number: str, otp: str) -> bool:
+    if phone_number not in otp_sms_store:
+        return False
+    if otp_sms_store[phone_number] != otp:
+        return False
+    del otp_sms_store[phone_number]
+    verified_phone_numbers.add(phone_number)
     return True
 
 def hash_password(password: str) -> str:
@@ -56,7 +82,10 @@ def create_user(name: str, email: str, phone: str, password: str, location: str)
     now = datetime.now(timezone.utc).isoformat()
 
     if email not in verified_emails:
-        raise ValueError("User not verified via OTP")
+        raise ValueError("User Email not verified via OTP")
+
+    if phone not in verified_phone_numbers:
+        raise ValueError("User Phone Number not verified via OTP")
     
     user_data = {
         "username": name,
@@ -72,14 +101,28 @@ def create_user(name: str, email: str, phone: str, password: str, location: str)
     
     if email in verified_emails:
         verified_emails.remove(email)
+    if phone in verified_phone_numbers:
+        verified_phone_numbers.remove(phone)
         
     return response
 
 def login_user(email: str = None, phone: str = None, password: str = None):
     if not password:
         raise ValueError("Password is required")
+        
+    # Clean up accidental whitespace or empty strings
+    email = email.strip() if email and email.strip() else None
+    phone = phone.strip() if phone and phone.strip() else None
+        
     if not email and not phone:
         raise ValueError("Email or phone is required")
+        
+    # If the frontend uses a single "Email/Phone" field, it probably sent the phone number as 'email'.
+    # We can detect this by checking if the 'email' lacks an '@' symbol.
+    if email and "@" not in email:
+        if not phone:
+            phone = email 
+        email = None
         
     query = supabase.table("users").select("*")
     if email:
