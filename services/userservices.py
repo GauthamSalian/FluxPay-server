@@ -22,6 +22,13 @@ def send_otp_email(receiver_email, otp):
     sender_email = os.getenv("APP_GMAIL")
     app_password = os.getenv("APP_PASSWORD")
 
+    query = supabase.table("users").select("*")
+    if receiver_email:
+        query = query.eq("email", receiver_email)
+        response = query.execute()
+        if response.data:
+            raise ValueError("Email already exists in the database")
+
     subject = "FluxPay: Your OTP Code"
     body = f"Your OTP is: {otp}. It will expire in 5 minutes."
 
@@ -38,6 +45,12 @@ def send_otp_email(receiver_email, otp):
     return True
 
 def send_otp_sms(phone_number: str, otp: str):
+    query = supabase.table("users").select("*")
+    if phone_number:
+        query = query.eq("phone", phone_number)
+        response = query.execute()
+        if response.data:
+            raise ValueError("Phone Number already exists in the database")
     account_sid = os.getenv("TWILIO_SID")
     auth_token = os.getenv("TWILIO_AUTH_TOKEN")
     client = Client(account_sid, auth_token)
