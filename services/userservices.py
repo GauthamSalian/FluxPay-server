@@ -7,6 +7,8 @@ from email.mime.text import MIMEText
 from dotenv import load_dotenv
 import os
 from twilio.rest import Client
+from jose import jwt
+from datetime import datetime, timedelta
 load_dotenv()
 
 otp_store = {}
@@ -175,3 +177,13 @@ def change_password(old_password: str, new_password: str, confirm_new_password: 
         
     response = query.execute()
     return response
+
+SECRET_KEY = "your_secret"
+ALGORITHM = "HS256"
+
+def create_access_token(data: dict):
+    to_encode = data.copy()
+    expire = datetime.now(timezone.utc) + timedelta(hours=2)
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
