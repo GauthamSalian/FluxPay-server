@@ -11,8 +11,6 @@ from jose import jwt
 from datetime import datetime, timedelta
 load_dotenv()
 
-otp_store = {}
-otp_sms_store = {}
 verified_emails = set()
 verified_phone_numbers = set()
 
@@ -43,7 +41,7 @@ def send_otp_email(receiver_email, otp):
         server.login(sender_email, app_password)
         server.send_message(msg)
     
-    otp_store[receiver_email] = str(otp)
+    supabase.table("otp").insert({"mail": receiver_email, "otp": str(otp)}).execute()
     return True
 
 def send_otp_sms(phone_number: str, otp: str):
@@ -62,26 +60,44 @@ def send_otp_sms(phone_number: str, otp: str):
         to=phone_number
     )
 
-    otp_sms_store[phone_number] = str(otp)
+    supabase.table("otp").insert({"phone": phone_number, "otp": str(otp)}).execute()
     return True
 
 def verify_otp(email: str, otp: str) -> bool:
-    if email not in otp_store:
+    response = supabase.table("otp").select("*").eq("mail", email).eq("otp", otp).execute()
+    if not response.data:
         return False
-    if otp_store[email] != otp:
-        return False
-    del otp_store[email]
-    verified_emails.add(email)
-    return True
+    
+    otps_data = sorted(response.data, key=lambda x: x['created_at'], reverse=True)
+    record = otps_data[0]
+    
+    created_at_str = record['created_at'].replace('Z', '+00:00')
+    created_at = datetime.fromisoformat(created_at_str)
+    
+    if datetime.now(timezone.utc) - created_at <= timedelta(minutes=3):
+        supabase.table("otp").delete().eq("id", record['id']).execute()
+        verified_emails.add(email)
+        return True
+    
+    return False
 
 def verify_otp_sms(phone_number: str, otp: str) -> bool:
-    if phone_number not in otp_sms_store:
+    response = supabase.table("otp").select("*").eq("phone", phone_number).eq("otp", otp).execute()
+    if not response.data:
         return False
-    if otp_sms_store[phone_number] != otp:
-        return False
-    del otp_sms_store[phone_number]
-    verified_phone_numbers.add(phone_number)
-    return True
+        
+    otps_data = sorted(response.data, key=lambda x: x['created_at'], reverse=True)
+    record = otps_data[0]
+    
+    created_at_str = record['created_at'].replace('Z', '+00:00')
+    created_at = datetime.fromisoformat(created_at_str)
+    
+    if datetime.now(timezone.utc) - created_at <= timedelta(minutes=3):
+        supabase.table("otp").delete().eq("id", record['id']).execute()
+        verified_phone_numbers.add(phone_number)
+        return True
+    
+    return False
 
 def hash_password(password: str) -> str:
     # generate salt and hash password
