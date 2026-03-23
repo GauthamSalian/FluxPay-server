@@ -90,9 +90,19 @@ def login_user_route(req: LoginUserReq):
             phone=req.phone,
             password=req.password
         )
+        
+        # Generate access token
+        identifier = user.get("email") or user.get("phone")
+        access_token = userservices.create_access_token(data={"sub": str(identifier)})
+        
         # Avoid returning the hashed password
         safe_user_data = {k: v for k, v in user.items() if k != "hashed_password"}
-        return {"message": "Login successful", "user": safe_user_data}
+        return {
+            "message": "Login successful", 
+            "user": safe_user_data,
+            "access_token": access_token,
+            "token_type": "bearer"
+        }
     except ValueError as e:
         raise HTTPException(status_code=401, detail=str(e))
     except Exception as e:

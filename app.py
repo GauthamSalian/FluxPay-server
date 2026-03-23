@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from api.userroutes import router as user_router
+from api.walletroutes import router as wallet_router
 
 app = FastAPI(title="FluxPay Server")
 
@@ -13,6 +14,7 @@ app.add_middleware(
 )
 
 app.include_router(user_router, prefix="/api/users", tags=["users"])
+app.include_router(wallet_router, prefix="/api/wallets", tags=["wallets"])
 
 @app.get("/")
 def read_root():

@@ -7,6 +7,8 @@ from email.mime.text import MIMEText
 from dotenv import load_dotenv
 import os
 from twilio.rest import Client
+from jose import jwt
+from datetime import datetime, timedelta
 load_dotenv()
 
 otp_store = {}
@@ -21,6 +23,13 @@ def generate_otp() -> str:
 def send_otp_email(receiver_email, otp):
     sender_email = os.getenv("APP_GMAIL")
     app_password = os.getenv("APP_PASSWORD")
+
+    query = supabase.table("users").select("*")
+    if receiver_email:
+        query = query.eq("email", receiver_email)
+        response = query.execute()
+        if response.data:
+            raise ValueError("Email already exists in the database")
 
     subject = "FluxPay: Your OTP Code"
     body = f"Your OTP is: {otp}. It will expire in 5 minutes."
@@ -38,6 +47,12 @@ def send_otp_email(receiver_email, otp):
     return True
 
 def send_otp_sms(phone_number: str, otp: str):
+    query = supabase.table("users").select("*")
+    if phone_number:
+        query = query.eq("phone", phone_number)
+        response = query.execute()
+        if response.data:
+            raise ValueError("Phone Number already exists in the database")
     account_sid = os.getenv("TWILIO_SID")
     auth_token = os.getenv("TWILIO_AUTH_TOKEN")
     client = Client(account_sid, auth_token)
@@ -162,3 +177,44 @@ def change_password(old_password: str, new_password: str, confirm_new_password: 
         
     response = query.execute()
     return response
+
+SECRET_KEY = os.getenv("JWT_SECRET", "your_secret")
+ALGORITHM = "HS256"
+
+def create_access_token(data: dict):
+    to_encode = data.copy()
+    expire = datetime.now(timezone.utc) + timedelta(hours=2)
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
+
+from fastapi import Depends, HTTPException
+from fastapi.security import OAuth2PasswordBearer
+from jose import JWTError
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/users/login")
+
+def get_current_user(token: str = Depends(oauth2_scheme)):
+    credentials_exception = HTTPException(
+        status_code=401,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        identifier: str = payload.get("sub")
+        if identifier is None:
+            raise credentials_exception
+    except JWTError:
+        raise credentials_exception
+    
+    query = supabase.table("users").select("*")
+    if "@" in identifier:
+        query = query.eq("email", identifier)
+    else:
+        query = query.eq("phone", identifier)
+        
+    response = query.execute()
+    if not response.data:
+        raise credentials_exception
+    return response.data[0]
