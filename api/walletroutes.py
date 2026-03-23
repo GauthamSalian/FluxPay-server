@@ -93,3 +93,14 @@ def deposit_verify_route(req: VerifyDepositReq, current_user: dict = Depends(get
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+@router.get("/deposits")
+def get_deposit_history_route(current_user: dict = Depends(get_current_user)):
+    try:
+        user_id = str(current_user.get("id"))
+        deposits = walletservices.get_deposit_history(user_id=user_id)
+        return {"deposits": deposits}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))

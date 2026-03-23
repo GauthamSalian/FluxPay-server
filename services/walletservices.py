@@ -119,3 +119,10 @@ def deposit_funds_to_wallet(user_id: str, amount: float, razorpay_payment_id: st
     supabase.table("deposits").insert(deposit_data).execute()
     
     return {"message": "Deposit successful", "new_balance": new_balance}
+
+def get_deposit_history(user_id: str):
+    wallet = get_wallet(user_id)
+    wallet_id = wallet["id"]
+    
+    query = supabase.table("deposits").select("*").eq("wallet_id", wallet_id).order("created_at", desc=True).execute()
+    return query.data
