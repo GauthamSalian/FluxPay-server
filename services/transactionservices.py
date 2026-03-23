@@ -7,7 +7,7 @@ def get_transaction_history(user_id: str):
     wallet = walletservices.get_wallet(user_id)
     wallet_id = str(wallet["id"])
     
-    query = supabase.table("transactions").select("*").or_(f"sender_wallet.eq.{wallet_id},receiver_wallet.eq.{wallet_id}").order("created_at", desc=True).execute()
+    query = supabase.table("transactions").select("*").or_(f"sender_wallet_id.eq.{wallet_id},receiver_wallet_id.eq.{wallet_id}").order("created_at", desc=True).execute()
     return query.data
 
 def process_transaction(sender_id: str, receiver_id: str, amount: float, pin: str):
@@ -17,31 +17,31 @@ def process_transaction(sender_id: str, receiver_id: str, amount: float, pin: st
     if sender_id == receiver_id:
         raise ValueError("Cannot send money to yourself")
         
-    sender_wallet = walletservices.get_wallet(sender_id)
+    sender_wallet_id = walletservices.get_wallet(sender_id)
     try:
-        receiver_wallet = walletservices.get_wallet(receiver_id)
+        receiver_wallet_id = walletservices.get_wallet(receiver_id)
     except ValueError:
         raise ValueError("Receiver does not have a wallet set up")
     
-    if not sender_wallet.get("transaction_pin"):
+    if not sender_wallet_id.get("transaction_pin"):
         raise ValueError("Sender wallet has no transaction PIN set")
         
-    if not userservices.verify_password(pin, sender_wallet["transaction_pin"]):
+    if not userservices.verify_password(pin, sender_wallet_id["transaction_pin"]):
         raise ValueError("Invalid transaction PIN")
         
-    if float(sender_wallet["balance"]) < amount:
+    if float(sender_wallet_id["balance"]) < amount:
         raise ValueError("Insufficient funds")
         
-    new_sender_balance = float(sender_wallet["balance"]) - amount
-    new_receiver_balance = float(receiver_wallet["balance"]) + amount
+    new_sender_balance = float(sender_wallet_id["balance"]) - amount
+    new_receiver_balance = float(receiver_wallet_id["balance"]) + amount
     
-    supabase.table("wallet").update({"balance": new_sender_balance}).eq("id", sender_wallet["id"]).execute()
-    supabase.table("wallet").update({"balance": new_receiver_balance}).eq("id", receiver_wallet["id"]).execute()
+    supabase.table("wallet").update({"balance": new_sender_balance}).eq("id", sender_wallet_id["id"]).execute()
+    supabase.table("wallet").update({"balance": new_receiver_balance}).eq("id", receiver_wallet_id["id"]).execute()
     
     tx_data = {
         "id": str(uuid.uuid4()),
-        "sender_wallet": sender_wallet["id"],
-        "receiver_wallet": receiver_wallet["id"],
+        "sender_wallet_id": sender_wallet_id["id"],
+        "receiver_wallet_id": receiver_wallet_id["id"],
         "amount": amount,
         "created_at": datetime.now(timezone.utc).isoformat()
     }
